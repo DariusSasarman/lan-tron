@@ -11,6 +11,10 @@ The game is intentionally lightweight:
 - No frontend build step is required; Three.js is loaded from a CDN.
 - Race state is kept in memory, so restarting the server starts a fresh room.
 
+## Here's how it looks:
+<img width="1538" height="755" alt="image" src="https://github.com/user-attachments/assets/86057458-b0db-4b0e-8337-66fab41711c8" />
+
+
 ## Quick start
 
 ### Local development
