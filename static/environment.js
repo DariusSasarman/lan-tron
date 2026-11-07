@@ -19,6 +19,7 @@ export function buildEnvironment(scene, params) {
   const skyGeo = new THREE.SphereGeometry(4000, 24, 12);
   const skyMat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
+    fog: false,
     uniforms: { uTop:{value:new THREE.Color(T.skyTop)}, uBot:{value:new THREE.Color(T.skyBot)}, uSmog:{value:new THREE.Color(0x3a2a4a)} },
     vertexShader:"varying vec3 v; void main(){ v=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }",
     fragmentShader:"varying vec3 v; uniform vec3 uTop,uBot,uSmog; void main(){ float t=normalize(v).y*0.5+0.5; vec3 c=mix(uBot,uTop,t); c=mix(c,uSmog,0.25*(1.0-t)); gl_FragColor=vec4(c,1.0); }"
@@ -50,7 +51,7 @@ export function buildEnvironment(scene, params) {
       const r=1200+layer*800;
       const ang=Math.random()*Math.PI*2;
       const x=Math.cos(ang)*r, z=Math.sin(ang)*r;
-      const mat=new THREE.MeshBasicMaterial({color: layer===0?0x1a0a2e:layer===1?0x0f0a1e:0x05020f});
+      const mat=new THREE.MeshBasicMaterial({color: layer===0?0x1a0a2e:layer===1?0x0f0a1e:0x05020f, fog:false});
       const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
       m.position.set(x,h/2,z); add(scene,m);
       if(layer===0){

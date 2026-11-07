@@ -1,6 +1,6 @@
 
 import * as THREE from "./vendor/three.module.js";
-import { initRender, renderFrame, applyVertexSnap, handleResize } from "./render.js";
+import { initRender, renderFrame, applyVertexSnap, applyVertexSnapToScene, handleResize } from "./render.js";
 import { STYLE } from "./style.js";
 import { buildEnvironment, updateEnvironment } from "./environment.js";
 import { makeKart, neonColorFor } from "./vehicles.js";
@@ -76,10 +76,15 @@ let connected = false;
 
 const renderer = initRender();
 const scene = new THREE.Scene();
+const hemi = new THREE.HemisphereLight(0x6a3ddc, 0x1a0a1a, 0.6);
+scene.add(hemi);
+const dir = new THREE.DirectionalLight(0xff4d8d, 0.4);
+dir.position.set(100, 200, 50);
+scene.add(dir);
 scene.background = new THREE.Color(STYLE.render.fogColor);
 scene.fog = new THREE.Fog(STYLE.render.fogColor, STYLE.render.fogNear, STYLE.render.fogFar);
 
-const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 5000);
+const camera = new THREE.PerspectiveCamera(65, 480/270, 0.1, 5000);
 
 /* =========================================================
    MATERIALS
@@ -228,6 +233,7 @@ function removeMushrooms() {
 function spawnMushrooms() {
     removeMushrooms();
     const mat = new THREE.MeshStandardMaterial({ color: 0xff66cc, emissive: 0x660044 });
+    applyVertexSnap(mat);
     for (let i = 0; i < CONFIG.mushroomCount; i++) {
         const seg = trackSegments[Math.floor(Math.random() * trackSegments.length)];
         const t = Math.random();
@@ -289,8 +295,8 @@ function buildTrack(params) {
     };
     const theme = themes[params.theme] || themes.grass;
     materials.grass.color.setHex(theme.ground);
-    scene.background = new THREE.Color(0x0a0014);
-    scene.fog = new THREE.Fog(0x0a0014, 1200, 4000);
+    scene.background = new THREE.Color(STYLE.render.fogColor);
+    scene.fog = new THREE.Fog(STYLE.render.fogColor, STYLE.render.fogNear, STYLE.render.fogFar);
 
     trackPoints = [];
     trackSegments = [];
@@ -569,6 +575,7 @@ function buildTrack(params) {
     rebuildBuildings();
     const env = buildEnvironment(scene, { theme: params.theme || "Downtown" });
     window.__env = env;
+    applyVertexSnapToScene(scene);
 }
 
 buildTrack({
@@ -583,6 +590,7 @@ buildTrack({
 ========================================================= */
 
 const player = makeKart(neonColorFor("player"));
+scene.add(player.root);
 
 const remoteKarts = new Map();
 const playerNames = new Map();
@@ -726,6 +734,7 @@ ws.onmessage = event => {
 
         if (!remote) {
             remote = makeKart(neonColorFor(message.id));
+            scene.add(remote.root);
             remoteKarts.set(message.id, remote);
         }
 
@@ -795,11 +804,17 @@ ws.onmessage = event => {
 function renderScoreboard() {
     const el = document.getElementById("scoreboard");
     const ids = [myId, ...remoteKarts.keys()];
-    el.innerHTML = "<b>Players</b><br>" + ids.map(id => {
+    el.textContent = "";
+    const b = document.createElement("b");
+    b.textContent = "Players";
+    el.appendChild(b);
+    el.appendChild(document.createElement("br"));
+    ids.forEach((id, i) => {
+        if (i) el.appendChild(document.createElement("br"));
         const name = playerNames.get(id) || id;
         const w = playerWins.get(id) || 0;
-        return (id === myId ? "* " : "") + name + " (" + w + ")";
-    }).join("<br>");
+        el.appendChild(document.createTextNode((id === myId ? "* " : "") + name + " (" + w + ")"));
+    });
 }
 
 function drawMinimap() {
@@ -902,6 +917,7 @@ function createShell(message) {
     if (shells.has(message.projectile_id)) return;
 
     const mesh = new THREE.Mesh(shellGeometry, materials.shell);
+    applyVertexSnap(materials.shell);
 
     const forward = new THREE.Vector3(
         Math.sin(message.ang),
@@ -1007,37 +1023,57 @@ function updateShells(dt) {
    TRACK COLLISION
 ========================================================= */
 
+const _ctpAb = new THREE.Vector3();
+const _ctpAp = new THREE.Vector3();
+const _ctpPoint = new THREE.Vector3();
+let _ctpLastIndex = 0;
+
 function closestTrackPoint(position) {
     let bestDistanceSq = Infinity;
-    let bestPoint = null;
-    let bestSegment = null;
+    let bestPoint = _ctpPoint;
+    let bestSegment = trackSegments[0];
+    let bestIndex = 0;
 
-    for (const segment of trackSegments) {
-        const ab = new THREE.Vector3().subVectors(segment.b, segment.a);
-        const ap = new THREE.Vector3().subVectors(position, segment.a);
+    const n = trackSegments.length;
+    const start = Math.max(0, _ctpLastIndex - 8);
+    const end = Math.min(n, _ctpLastIndex + 9);
 
-        const t = THREE.MathUtils.clamp(
-            ap.dot(ab) / ab.lengthSq(),
-            0,
-            1
-        );
-
-        const point = segment.a.clone().addScaledVector(ab, t);
-
-        const distanceSq = position.distanceToSquared(point);
-
-        if (distanceSq < bestDistanceSq) {
-            bestDistanceSq = distanceSq;
-            bestPoint = point;
+    // Local window first
+    for (let i = start; i < end; i++) {
+        const segment = trackSegments[i];
+        _ctpAb.subVectors(segment.b, segment.a);
+        _ctpAp.subVectors(position, segment.a);
+        const lenSq = _ctpAb.lengthSq();
+        const t = THREE.MathUtils.clamp(lenSq > 0 ? _ctpAp.dot(_ctpAb) / lenSq : 0, 0, 1);
+        _ctpPoint.copy(segment.a).addScaledVector(_ctpAb, t);
+        const d = position.distanceToSquared(_ctpPoint);
+        if (d < bestDistanceSq) {
+            bestDistanceSq = d;
+            bestPoint = _ctpPoint.clone();
             bestSegment = segment;
+            bestIndex = i;
         }
     }
-
-    return {
-        point: bestPoint,
-        segment: bestSegment,
-        distance: Math.sqrt(bestDistanceSq)
-    };
+    // Fallback full scan if window missed
+    if (bestDistanceSq === Infinity || bestDistanceSq > 1e6) {
+        for (let i = 0; i < n; i++) {
+            const segment = trackSegments[i];
+            _ctpAb.subVectors(segment.b, segment.a);
+            _ctpAp.subVectors(position, segment.a);
+            const lenSq = _ctpAb.lengthSq();
+            const t = THREE.MathUtils.clamp(lenSq > 0 ? _ctpAp.dot(_ctpAb) / lenSq : 0, 0, 1);
+            _ctpPoint.copy(segment.a).addScaledVector(_ctpAb, t);
+            const d = position.distanceToSquared(_ctpPoint);
+            if (d < bestDistanceSq) {
+                bestDistanceSq = d;
+                bestPoint = _ctpPoint.clone();
+                bestSegment = segment;
+                bestIndex = i;
+            }
+        }
+    }
+    _ctpLastIndex = bestIndex;
+    return { point: bestPoint, segment: bestSegment, distance: Math.sqrt(bestDistanceSq) };
 }
 
 /* =========================================================
@@ -1346,6 +1382,10 @@ function updateDriving(dt) {
 function resetRace() {
     positionPlayerAtSpawn();
     initProgress();
+    // snap camera immediately
+    const forward = new THREE.Vector3(Math.sin(ang),0,Math.cos(ang));
+    camera.position.copy(player.root.position).addScaledVector(forward,-9).add(new THREE.Vector3(0,5.5,0));
+    camera.lookAt(player.root.position.clone().addScaledVector(forward,5).add(new THREE.Vector3(0,1,0)));
 
     lap = 1;
     lapTime = 0;
@@ -1524,7 +1564,7 @@ requestAnimationFrame(animate);
 ========================================================= */
 
 window.addEventListener("resize", () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.aspect = 480 / 270;
     camera.updateProjectionMatrix();
     handleResize();
 });

@@ -1,5 +1,6 @@
 // vehicles.js — angular low-poly cyber-cars
 import * as THREE from "./vendor/three.module.js";
+import { applyVertexSnap } from "./render.js";
 
 const NEON_PALETTE = [0xff00ff,0x00ffff,0xffee00,0x00ff80,0xff4d8d];
 
@@ -52,7 +53,7 @@ export function makeKart(color) {
   tag.position.set(0,2.2,0); visual.add(tag);
   root.userData.tag = tag;
 
-  scene.add(root);
+  root.traverse((o) => { if (o.material) applyVertexSnap(o.material); });
   return { root, visual };
 }
 

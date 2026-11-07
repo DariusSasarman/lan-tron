@@ -40,22 +40,45 @@ export function handleResize() {
   const scale = Math.floor(Math.min(w / cfg.lowResWidth, h / cfg.lowResHeight)) || 1;
   const vw = cfg.lowResWidth * scale;
   const vh = cfg.lowResHeight * scale;
+  const ox = Math.floor((w - vw) / 2);
+  const oy = Math.floor((h - vh) / 2);
   renderer.setSize(w, h, false);
   renderer.domElement.style.width = w + "px";
   renderer.domElement.style.height = h + "px";
+  renderer.setViewport(ox, oy, vw, vh);
+  renderer.setScissor(ox, oy, vw, vh);
+  renderer.setScissorTest(true);
 }
 
 export function applyVertexSnap(material) {
   if (!material) return;
+  if (material.userData && material.userData._vertexSnapPatched) return;
   material.flatShading = STYLE.render.flatShading;
   const snap = STYLE.render.vertexSnap;
-  material.onBeforeCompile = (shader) => {
-    shader.vertexShader = shader.vertexShader.replace(
-      "#include <begin_vertex>",
-      `vec3 transformed = position;\n transformed = floor(transformed * ${snap}.0 + 0.5) / ${snap}.0;`
-    );
-  };
+  if (snap && snap > 0) {
+    material.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader.replace(
+        "#include <project_vertex>",
+        "#include <project_vertex>\n  gl_Position.xy = floor(gl_Position.xy / gl_Position.w * " + snap + ".0 + 0.5) / " + snap + ".0 * gl_Position.w;"
+      );
+    };
+  }
+  if (!material.userData) material.userData = {};
+  material.userData._vertexSnapPatched = true;
   material.needsUpdate = true;
+}
+
+export function applyVertexSnapToScene(root) {
+  if (!root) return;
+  const seen = new WeakSet();
+  root.traverse((obj) => {
+    const mats = Array.isArray(obj.material) ? obj.material : (obj.material ? [obj.material] : []);
+    for (const m of mats) {
+      if (!m || seen.has(m)) continue;
+      seen.add(m);
+      applyVertexSnap(m);
+    }
+  });
 }
 
 export function renderFrame(scene, camera, dt = 0.016) {
