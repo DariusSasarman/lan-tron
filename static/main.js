@@ -1,5 +1,7 @@
 
-import * as THREE from "three";
+import * as THREE from "./vendor/three.module.js";
+import { initRender, renderFrame, applyVertexSnap, handleResize } from "./render.js";
+import { STYLE } from "./style.js";
 
 /* =========================================================
    CONFIGURATION
@@ -68,43 +70,12 @@ let connected = false;
    THREE.JS INITIALIZATION
 ========================================================= */
 
+const renderer = initRender();
 const scene = new THREE.Scene();
+scene.background = new THREE.Color(STYLE.render.fogColor);
+scene.fog = new THREE.Fog(STYLE.render.fogColor, STYLE.render.fogNear, STYLE.render.fogFar);
 
-scene.background = new THREE.Color(0x0a0014);
-scene.fog = new THREE.Fog(0x0a0014, 1200, 4000);
-
-const camera = new THREE.PerspectiveCamera(
-    65,
-    window.innerWidth / window.innerHeight,
-    0.1,
-    5000
-);
-
-const renderer = new THREE.WebGLRenderer({
-    antialias: false
-});
-
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(1);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-document.body.appendChild(renderer.domElement);
-
-scene.add(new THREE.HemisphereLight(0xffffff, 0x526044, 1.3));
-
-const sun = new THREE.DirectionalLight(0xffffff, 2.0);
-sun.position.set(80, 120, 40);
-sun.castShadow = true;
-
-sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -2000;
-sun.shadow.camera.right = 2000;
-sun.shadow.camera.top = 2000;
-sun.shadow.camera.bottom = -2000;
-
-scene.add(sun);
+const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 5000);
 
 /* =========================================================
    MATERIALS
@@ -163,6 +134,8 @@ const materials = {
         emissiveIntensity: 1
     })
 };
+
+for (const m of Object.values(materials)) { if (m && m.flatShading !== undefined) m.flatShading = true; }
 
 /* =========================================================
    WORLD
@@ -1603,7 +1576,7 @@ function animate(now) {
         camera.lookAt(0, 0, 0);
     }
 
-    renderer.render(scene, camera);
+    renderFrame(scene, camera, dt);
 }
 
 requestAnimationFrame(animate);
@@ -1614,9 +1587,7 @@ requestAnimationFrame(animate);
 
 window.addEventListener("resize", () => {
     camera.aspect = window.innerWidth / window.innerHeight;
-
     camera.updateProjectionMatrix();
-
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    handleResize();
 });
 
