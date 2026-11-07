@@ -2,6 +2,7 @@
 import * as THREE from "./vendor/three.module.js";
 import { initRender, renderFrame, applyVertexSnap, handleResize } from "./render.js";
 import { STYLE } from "./style.js";
+import { buildEnvironment, updateEnvironment } from "./environment.js";
 
 /* =========================================================
    CONFIGURATION
@@ -563,6 +564,8 @@ function buildTrack(params) {
 
     spawnMushrooms();
     rebuildBuildings();
+    const env = buildEnvironment(scene, { theme: params.theme || "Downtown" });
+    window.__env = env;
 }
 
 buildTrack({
@@ -1575,7 +1578,7 @@ function animate(now) {
     } else {
         camera.lookAt(0, 0, 0);
     }
-
+    updateEnvironment(dt, window.__env);
     renderFrame(scene, camera, dt);
 }
 
