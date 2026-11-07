@@ -116,3 +116,8 @@ button:hover { background: #4ade80; }
     font-size: 13px;
     pointer-events: none;
 }
+
+@font-face { font-family: 'Pixel'; src: local('Courier New'); }
+body { font-family: 'Pixel', monospace; }
+#hud { border: 2px solid #FCEE0A; background: #000a; color: #FCEE0A; clip-path: polygon(0 0, 95% 0, 100% 12%, 100% 100%, 5% 100%, 0 88%); }
+#wrongway { display:none; position:fixed; top:40%; left:50%; transform:translateX(-50%); color:#ff00ff; font-size:28px; z-index:6; text-shadow:0 0 8px #ff00ff; }

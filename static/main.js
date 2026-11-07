@@ -4,6 +4,8 @@ import { initRender, renderFrame, applyVertexSnap, handleResize } from "./render
 import { STYLE } from "./style.js";
 import { buildEnvironment, updateEnvironment } from "./environment.js";
 import { makeKart, neonColorFor } from "./vehicles.js";
+import { initHUD, updateHUD as hudUpdate } from "./hud.js";
+import { showTitle, hideTitle } from "./menus.js";
 
 /* =========================================================
    CONFIGURATION
