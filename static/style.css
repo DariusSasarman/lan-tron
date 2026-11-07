@@ -5,7 +5,7 @@ html, body {
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background: #101820;
+    background: #070a12;
     color: white;
     font-family: system-ui, sans-serif;
 }
@@ -29,7 +29,11 @@ canvas { display: block; }
 
 #hud b { color: #67e8f9; }
 #speed { font-size: 24px; color: white; }
+#speedbar { display: flex; gap: 3px; margin: 3px 0 5px; }
+#speedbar i { width: 15px; height: 5px; background: #222; border: 1px solid #444; }
+#speedbar i.on { background: #FCEE0A; box-shadow: 0 0 5px #FCEE0A; }
 #connection { color: #fbbf24; }
+#fps { color: #67e8f9; margin-left: 12px; }
 
 #help {
     position: fixed;
@@ -61,7 +65,8 @@ canvas { display: block; }
     padding: 32px;
     border: 1px solid #ffffff25;
     border-radius: 16px;
-    background: #111d2b;
+    border-color: #FCEE0A;
+    background: #05060b;
     text-align: center;
 }
 
@@ -69,7 +74,14 @@ canvas { display: block; }
     margin: 0;
     font-size: 38px;
     letter-spacing: 2px;
+    color: #FCEE0A;
+    text-shadow: 4px 0 #ff00a8;
 }
+
+.boot, .boot-hint { color: #67e8f9; font-size: 11px; letter-spacing: 1px; }
+.subtitle { color: #ff4d8d; letter-spacing: 3px; font-size: 12px; }
+.lobby-state { margin-top: 15px; color: #FCEE0A; font-size: 12px; }
+.player-swatch { display: inline-block; width: 10px; height: 10px; margin-right: 6px; background: #00ffff; box-shadow: 0 0 8px #00ffff; }
 
 #panel p {
     color: #aab7c5;

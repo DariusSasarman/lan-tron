@@ -23,7 +23,7 @@ resetting: bool = False
 player_names: dict[str, str] = {}
 wins: dict[str, int] = {}
 
-THEMES = ["grass", "sand", "leaves", "snow", "dirt"]
+THEMES = ["Downtown", "Industrial", "Waterfront"]
 
 def generate_track_params():
     """Generate harmonics for a smooth, longer closed loop."""

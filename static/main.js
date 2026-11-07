@@ -1,7 +1,7 @@
 
 import * as THREE from "./vendor/three.module.js";
 import { initRender, renderFrame, applyVertexSnap, applyVertexSnapToScene, handleResize } from "./render.js";
-import { STYLE } from "./style.js";
+import { STYLE, cyclePreset } from "./style.js";
 import { buildEnvironment, updateEnvironment } from "./environment.js";
 import { makeKart, neonColorFor } from "./vehicles.js";
 import { initHUD, updateHUD as hudUpdate } from "./hud.js";
@@ -84,7 +84,12 @@ scene.add(dir);
 scene.background = new THREE.Color(STYLE.render.fogColor);
 scene.fog = new THREE.Fog(STYLE.render.fogColor, STYLE.render.fogNear, STYLE.render.fogFar);
 
-const camera = new THREE.PerspectiveCamera(65, 480/270, 0.1, 5000);
+const camera = new THREE.PerspectiveCamera(
+    65,
+    STYLE.render.lowResWidth / STYLE.render.lowResHeight,
+    0.1,
+    5000
+);
 
 /* =========================================================
    MATERIALS
@@ -258,13 +263,7 @@ function buildTrack(params) {
     removeTrack();
 
     // Theme
-    const themes = {
-        grass: { ground: 0x347b42, sky: 0x87ceeb },
-        sand: { ground: 0xc2a878, sky: 0xdfe9f3 },
-        leaves: { ground: 0x8b5a2b, sky: 0xbfd6e8 },
-        snow: { ground: 0xe8eef2, sky: 0xcfe6f5 },
-        dirt: { ground: 0x5c4033, sky: 0xa9b8c9 },
-    };
+    const themes = STYLE.themes;
     const theme = themes[params.theme] || themes.grass;
     materials.grass.color.setHex(theme.ground);
     scene.background = new THREE.Color(STYLE.render.fogColor);
@@ -1464,8 +1463,11 @@ function sendPlayerState(dt) {
 ========================================================= */
 
 function updateHUD() {
-    document.getElementById("speed").textContent =
-        Math.round(Math.abs(vel) * 3.6);
+    const speed = Math.round(Math.abs(vel) * 3.6);
+    document.getElementById("speed").textContent = speed;
+    const bars = document.querySelectorAll("#speedbar i");
+    const filled = Math.min(bars.length, Math.round(speed / 18));
+    bars.forEach((bar, index) => bar.classList.toggle("on", index < filled));
 
     document.getElementById("lap").textContent =
         Math.min(lap, CONFIG.laps);
@@ -1475,6 +1477,8 @@ function updateHUD() {
 
     document.getElementById("best").textContent =
         bestLap === null ? "--" : bestLap.toFixed(2);
+    document.getElementById("position").textContent =
+        `1 / ${remoteKarts.size + 1}`;
 }
 
 /* =========================================================
@@ -1506,6 +1510,13 @@ let lastFrame = performance.now();
 
 function animate(now) {
     requestAnimationFrame(animate);
+    fpsFrames++;
+    if (now - fpsAt >= 500) {
+        document.getElementById("fps").textContent =
+            `${Math.round(fpsFrames * 1000 / (now - fpsAt))} FPS`;
+        fpsFrames = 0;
+        fpsAt = now;
+    }
 
     const dt = Math.min(
         0.04,
@@ -1535,14 +1546,31 @@ requestAnimationFrame(animate);
 ========================================================= */
 
 window.addEventListener("resize", () => {
-    camera.aspect = 480 / 270;
+    camera.aspect = STYLE.render.lowResWidth / STYLE.render.lowResHeight;
     camera.updateProjectionMatrix();
     handleResize();
 });
 
 
+let showFps = false;
+let fpsFrames = 0;
+let fpsAt = performance.now();
 window.addEventListener("keydown", e => {
-  if (e.key === "F1") { e.preventDefault(); alert("FX panel: edit style.js postfx"); }
-  if (e.key === "F2") { e.preventDefault(); console.log("FPS", (1/(performance.now()/1000)).toFixed(1)); }
-  if (e.key === "F3") { e.preventDefault(); console.log("Cycle preset"); }
+  if (e.key === "F1") {
+    e.preventDefault();
+    const enabled = Object.entries(STYLE.postfx)
+      .filter(([, value]) => value && "enabled" in value)
+      .map(([name, value]) => `${name}:${value.enabled ? "ON" : "OFF"}`)
+      .join(" ");
+    document.getElementById("connection").textContent = `${STYLE.activePreset} ${enabled}`;
+  }
+  if (e.key === "F2") {
+    e.preventDefault();
+    showFps = !showFps;
+    document.getElementById("fps").hidden = !showFps;
+  }
+  if (e.key === "F3") {
+    e.preventDefault();
+    document.getElementById("connection").textContent = `PRESET ${cyclePreset()}`;
+  }
 });

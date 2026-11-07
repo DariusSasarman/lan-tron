@@ -5,13 +5,14 @@ import { createCompositeMaterial, updateGlitch } from "./postfx.js";
 
 export let renderer, renderTarget, scene, camera;
 export let compositeScene, compositeCamera, compositeMesh;
+let compositeUniforms;
 
 export function initRender(canvasHost) {
   renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false });
   renderer.setPixelRatio(1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = false;
-  document.body.appendChild(renderer.domElement);
+  (canvasHost || document.body).appendChild(renderer.domElement);
 
   const cfg = STYLE.render;
   renderTarget = new THREE.WebGLRenderTarget(cfg.lowResWidth, cfg.lowResHeight, {
@@ -27,7 +28,7 @@ export function initRender(canvasHost) {
   const { material: compMat, uniforms: compUniforms } = createCompositeMaterial(renderTarget.texture);
   compositeMesh = new THREE.Mesh(geo, compMat);
   compositeScene.add(compositeMesh);
-  renderFrame._uniforms = compUniforms;
+  compositeUniforms = compUniforms;
 
   handleResize();
   window.addEventListener("resize", handleResize);
@@ -85,6 +86,20 @@ export function renderFrame(scene, camera, dt = 0.016) {
   renderer.setRenderTarget(renderTarget);
   renderer.render(scene, camera);
   renderer.setRenderTarget(null);
-  if (renderFrame._uniforms) updateGlitch(renderFrame._uniforms, dt);
+  if (compositeUniforms) {
+    syncPostFX(compositeUniforms);
+    updateGlitch(compositeUniforms, dt);
+  }
   renderer.render(compositeScene, compositeCamera);
+}
+
+function syncPostFX(uniforms) {
+  const p = STYLE.postfx;
+  uniforms.uBloom.value = p.bloom.enabled ? p.bloom.strength : 0;
+  uniforms.uCA.value = p.chromaticAberration.enabled ? p.chromaticAberration.strength : 0;
+  uniforms.uScan.value = p.scanlines.enabled ? p.scanlines.strength : 0;
+  uniforms.uBleed.value = p.colorBleed.enabled ? p.colorBleed.strength : 0;
+  uniforms.uVig.value = p.vignette.enabled ? p.vignette.strength : 0;
+  uniforms.uGrain.value = p.grain.enabled ? p.grain.strength : 0;
+  uniforms.uColors.value = STYLE.palette.colors;
 }

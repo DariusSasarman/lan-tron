@@ -2,7 +2,7 @@
 
 ## Structure
 - server/main.py: FastAPI + WebSocket authoritative server.
-- static/: index.html, style.css, main.js, style.js, render.js, postfx.js, vendor/three.module.js.
+- static/: index.html, style.css, main.js, style.js, render.js, postfx.js, environment.js, vehicles.js, hud.js, menus.js, vendor/three.module.js.
 - Docker: Dockerfile prod, docker-compose.yml.
 
 ## Render loop
@@ -19,7 +19,7 @@
 - Server authoritative; FX client-only.
 - .venv untracked.
 
-## Checklist (Stage 1)
+## Checklist
 - [x] NOTES.md
 - [x] .venv gitignored/untracked
 - [x] vendor three
@@ -27,10 +27,11 @@
 - [x] palette quantize + bayer dither
 - [x] fog/vertex snap/flat/no AA
 - [x] post chain toggles
-- [ ] docker build+run verified
-- [ ] 2-client test
-- [ ] commit+push
-## Stage 5 final
-- style.js single config with presets.
-- Hotkeys F1/F2/F3.
-- Cleanup done, no CDN, no audio.
+- [x] style.js single config with functional presets and themes
+- [x] Hotkeys F1/F2/F3
+- [x] cyberdeck HUD, minimap, wrong-way indicator, lobby overlay
+- [x] procedural Night City environment and low-fps ambient animation
+- [x] two-client WebSocket protocol smoke test
+- [ ] docker build+run verified (Docker socket unavailable in this environment)
+- [ ] browser two-client lap/FPS visual test
+- [ ] push to origin
