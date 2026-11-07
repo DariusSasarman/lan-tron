@@ -113,7 +113,7 @@ async def ws_endpoint(ws: WebSocket):
 
                 if not all(math.isfinite(v) for v in (x, z, ang, speed)):
                     continue
-                if abs(x) > 250 or abs(z) > 250:
+                if abs(x) > 2500 or abs(z) > 2500:
                     continue
 
                 last_shot_at[pid] = now
@@ -183,6 +183,8 @@ async def ws_endpoint(ws: WebSocket):
 
                 if not all(math.isfinite(v) for v in (x, z, ang, speed, spin)):
                     continue
+
+                speed = max(-100.0, min(100.0, speed))
 
                 await broadcast({
                     "type": "state",
