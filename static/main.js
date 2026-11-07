@@ -3,6 +3,7 @@ import * as THREE from "./vendor/three.module.js";
 import { initRender, renderFrame, applyVertexSnap, handleResize } from "./render.js";
 import { STYLE } from "./style.js";
 import { buildEnvironment, updateEnvironment } from "./environment.js";
+import { makeKart, neonColorFor } from "./vehicles.js";
 
 /* =========================================================
    CONFIGURATION
@@ -579,75 +580,7 @@ buildTrack({
    KART MODEL
 ========================================================= */
 
-function makeKart(color) {
-    const root = new THREE.Group();
-
-    const visual = new THREE.Group();
-    root.add(visual);
-
-    const body = new THREE.Mesh(
-        new THREE.BoxGeometry(1.9, 0.5, 3.2),
-        color === "red" ? materials.red : materials.blue
-    );
-
-    body.position.y = 0.48;
-    body.castShadow = true;
-    visual.add(body);
-
-    const hood = new THREE.Mesh(
-        new THREE.BoxGeometry(1.5, 0.2, 0.8),
-        color === "red" ? materials.red : materials.blue
-    );
-    hood.position.set(0, 0.62, 0.9);
-    visual.add(hood);
-
-    const rear = new THREE.Mesh(
-        new THREE.BoxGeometry(1.5, 0.25, 0.6),
-        materials.black
-    );
-    rear.position.set(0, 0.62, -1.0);
-    visual.add(rear);
-
-    const cabin = new THREE.Mesh(
-        new THREE.BoxGeometry(1.15, 0.48, 1.2),
-        materials.glass
-    );
-
-    cabin.position.set(0, 0.92, -0.2);
-    cabin.castShadow = true;
-    visual.add(cabin);
-
-    const wheelGeometry = new THREE.CylinderGeometry(0.36, 0.36, 0.3, 6);
-
-    for (const [x, z] of [
-        [-0.88, 0.9],
-        [0.88, 0.9],
-        [-0.88, -0.9],
-        [0.88, -0.9]
-    ]) {
-        const wheel = new THREE.Mesh(wheelGeometry, materials.black);
-
-        wheel.rotation.z = Math.PI / 2;
-        wheel.position.set(x, 0.35, z);
-        wheel.castShadow = true;
-
-        visual.add(wheel);
-    }
-
-    const spoiler = new THREE.Mesh(
-        new THREE.BoxGeometry(1.8, 0.12, 0.3),
-        materials.black
-    );
-
-    spoiler.position.set(0, 0.95, -1.25);
-    visual.add(spoiler);
-
-    scene.add(root);
-
-    return { root, visual };
-}
-
-const player = makeKart("red");
+const player = makeKart(neonColorFor("player"));
 
 const remoteKarts = new Map();
 const playerNames = new Map();
@@ -790,7 +723,7 @@ ws.onmessage = event => {
         let remote = remoteKarts.get(message.id);
 
         if (!remote) {
-            remote = makeKart("blue");
+            remote = makeKart(neonColorFor(message.id));
             remoteKarts.set(message.id, remote);
         }
 
