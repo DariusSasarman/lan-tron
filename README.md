@@ -30,3 +30,8 @@ Enter your name on the overlay, then START RACE.
 
 - Track is procedurally generated on the server per race.
 - Wins are kept in memory (reset on server restart).
+
+## PS2-era restyle
+What changed: low-res render target, palette dither, post chain, Night City environment, cyber-cars, HUD/menus.
+Toggles: edit static/style.js postfx. Hotkeys: F1 FX panel, F2 FPS, F3 cycle presets.
+Presets: PS2 Authentic, Clean Neon, Low FX.

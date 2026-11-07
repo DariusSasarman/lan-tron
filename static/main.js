@@ -1529,3 +1529,9 @@ window.addEventListener("resize", () => {
     handleResize();
 });
 
+
+window.addEventListener("keydown", e => {
+  if (e.key === "F1") { e.preventDefault(); alert("FX panel: edit style.js postfx"); }
+  if (e.key === "F2") { e.preventDefault(); console.log("FPS", (1/(performance.now()/1000)).toFixed(1)); }
+  if (e.key === "F3") { e.preventDefault(); console.log("Cycle preset"); }
+});

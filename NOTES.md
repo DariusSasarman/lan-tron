@@ -30,3 +30,7 @@
 - [ ] docker build+run verified
 - [ ] 2-client test
 - [ ] commit+push
+## Stage 5 final
+- style.js single config with presets.
+- Hotkeys F1/F2/F3.
+- Cleanup done, no CDN, no audio.

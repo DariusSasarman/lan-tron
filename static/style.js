@@ -21,7 +21,9 @@ export const STYLE = {
     grain: { enabled: true, strength: 0.15 },
     glitch: { enabled: true, intervalMin: 8, intervalMax: 20, strength: 0.4 },
   },
-  fx: {
-    lowFx: false,
+  presets: {
+    "PS2 Authentic": {},
+    "Clean Neon": {},
+    "Low FX": {},
   },
 };
