@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 
-app = FastAPI(title="LAN Kart")
+app = FastAPI(title="LAN Tron")
 
 # Resolves to the folder containing main.py's parent
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -178,10 +178,13 @@ async def ws_endpoint(ws: WebSocket):
                     ang = float(data["ang"])
                     speed = float(data.get("speed", 0))
                     spin = float(data.get("spin", 0))
+                    color = int(data.get("color", 0x2563EB))
                 except (KeyError, TypeError, ValueError):
                     continue
 
                 if not all(math.isfinite(v) for v in (x, z, ang, speed, spin)):
+                    continue
+                if not 0 <= color <= 0xFFFFFF:
                     continue
 
                 speed = max(-100.0, min(100.0, speed))
@@ -194,6 +197,7 @@ async def ws_endpoint(ws: WebSocket):
                     "ang": ang,
                     "speed": speed,
                     "spin": spin,
+                    "color": color,
                 }, exclude=ws)
 
     except WebSocketDisconnect:

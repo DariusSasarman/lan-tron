@@ -16,9 +16,9 @@ const CONFIG = {
     maxSpeed: 90,
     reverseSpeed: 18,
 
-    acceleration: 30,
+    acceleration: 15,
     braking: 40,
-    drag: 7,
+    drag: 11,
 
     steering: 2.2,
     minSteerFactor: 0.6,   // fraction of steering left at max speed
@@ -36,8 +36,40 @@ const CONFIG = {
 
     laps: 3,
 
-    boostAmount: 18,
-    mushroomCount: 4
+    boostAmount: 10,
+    mushroomCount: 8,
+
+    // Smaller blocks give the original pixel pass twice the resolution.
+    pixelSize: 3,
+    colorLevels: 32,
+
+    centerLineLength: 5,
+    centerLineWidth: 0.22,
+
+    fogNear: 140,
+    fogFar: 1400,
+    buildingRenderDistance: 1600
+};
+
+const KART_COLORS = [
+    0xef4444,
+    0x2563eb,
+    0x22c55e,
+    0xf59e0b,
+    0xa855f7,
+    0x06b6d4
+];
+
+function randomBetween(min, max) {
+    return min + Math.random() * (max - min);
+}
+
+const carStats = {
+    acceleration: randomBetween(12, 18),
+    maxSpeed: randomBetween(80, 100),
+    steering: randomBetween(1.8, 2.6),
+    shellCooldown: randomBetween(700, 1200),
+    color: KART_COLORS[Math.floor(Math.random() * KART_COLORS.length)]
 };
 
 /* =========================================================
@@ -56,6 +88,7 @@ const knockback = new THREE.Vector3();
 let ang = 0;
 let vel = 0;
 let boostTimer = 0;
+let sparkSpawnTimer = 0;
 
 let raceStarted = false;
 let finished = false;
@@ -71,13 +104,17 @@ let connected = false;
 const scene = new THREE.Scene();
 
 scene.background = new THREE.Color(0x0a0014);
-scene.fog = new THREE.Fog(0x0a0014, 1200, 4000);
+scene.fog = new THREE.Fog(
+    0x0a0014,
+    CONFIG.fogNear,
+    CONFIG.fogFar
+);
 
 const camera = new THREE.PerspectiveCamera(
     65,
     window.innerWidth / window.innerHeight,
     0.1,
-    5000
+    CONFIG.fogFar + 200
 );
 
 const renderer = new THREE.WebGLRenderer({
@@ -91,6 +128,107 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 document.body.appendChild(renderer.domElement);
+
+const sparkGeometry = new THREE.SphereGeometry(0.08, 4, 4);
+const sparkMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffb000,
+    fog: true
+});
+const sparks = [];
+
+function spawnWallSparks(position, normal) {
+    for (let i = 0; i < 3; i++) {
+        const mesh = new THREE.Mesh(sparkGeometry, sparkMaterial);
+        const velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 5 + normal.x * 4,
+            Math.random() * 4 + 1,
+            (Math.random() - 0.5) * 5 + normal.z * 4
+        );
+
+        mesh.position.copy(position)
+            .addScaledVector(normal, 0.12)
+            .add(new THREE.Vector3(0, 0.35, 0));
+        scene.add(mesh);
+        sparks.push({ mesh, velocity, life: 0.22 });
+    }
+}
+
+function updateSparks(dt) {
+    for (let i = sparks.length - 1; i >= 0; i--) {
+        const spark = sparks[i];
+        spark.life -= dt;
+        spark.velocity.y -= 12 * dt;
+        spark.mesh.position.addScaledVector(spark.velocity, dt);
+
+        if (spark.life <= 0) {
+            scene.remove(spark.mesh);
+            sparks.splice(i, 1);
+        }
+    }
+}
+
+const pixelRenderTarget = new THREE.WebGLRenderTarget(
+    window.innerWidth,
+    window.innerHeight,
+    {
+        minFilter: THREE.NearestFilter,
+        magFilter: THREE.NearestFilter,
+        depthBuffer: true
+    }
+);
+
+const pixelScene = new THREE.Scene();
+const pixelCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const pixelMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+        sceneTexture: { value: pixelRenderTarget.texture },
+        resolution: {
+            value: new THREE.Vector2(window.innerWidth, window.innerHeight)
+        },
+        pixelSize: { value: CONFIG.pixelSize },
+        colorLevels: { value: CONFIG.colorLevels }
+    },
+    vertexShader: `
+        varying vec2 vUv;
+
+        void main() {
+            vUv = uv;
+            gl_Position = vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform sampler2D sceneTexture;
+        uniform vec2 resolution;
+        uniform float pixelSize;
+        uniform float colorLevels;
+        varying vec2 vUv;
+
+        void main() {
+            vec2 pixelCoord = floor(vUv * resolution / pixelSize);
+            vec2 pixelatedUv = (pixelCoord + 0.5)
+                * pixelSize / resolution;
+            vec3 color = texture2D(sceneTexture, pixelatedUv).rgb;
+
+            float ditherX = mod(pixelCoord.x, 2.0);
+            float ditherY = mod(pixelCoord.y, 2.0);
+            float dither = ditherX > 0.5
+                ? (ditherY > 0.5 ? 0.25 : 0.5)
+                : (ditherY > 0.5 ? 0.75 : 0.0);
+            dither = (dither - 0.5) / colorLevels;
+
+            color = floor((color + dither) * colorLevels + 0.5)
+                / colorLevels;
+            gl_FragColor = vec4(color, 1.0);
+        }
+    `,
+    depthTest: false,
+    depthWrite: false
+});
+
+pixelScene.add(new THREE.Mesh(
+    new THREE.PlaneGeometry(2, 2),
+    pixelMaterial
+));
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0x526044, 1.3));
 
@@ -113,54 +251,63 @@ scene.add(sun);
 const materials = {
     grass: new THREE.MeshStandardMaterial({
         color: 0x347b42,
-        roughness: 1
+        roughness: 1,
+        fog: true
     }),
 
     asphalt: new THREE.MeshStandardMaterial({
         color: 0x30343b,
         roughness: 0.95,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
+        fog: true
     }),
 
     wall: new THREE.MeshStandardMaterial({
         color: 0x00ffff,
         emissive: 0x00ffff,
         emissiveIntensity: 0.5,
-        roughness: 0.5
+        roughness: 0.5,
+        fog: true
     }),
 
     line: new THREE.MeshStandardMaterial({
-        color: 0xffffff
+        color: 0xffffff,
+        fog: true
     }),
 
     red: new THREE.MeshStandardMaterial({
         color: 0xef4444,
         emissive: 0xef4444,
         emissiveIntensity: 0.6,
-        roughness: 0.65
+        roughness: 0.65,
+        fog: true
     }),
 
     blue: new THREE.MeshStandardMaterial({
         color: 0x2563eb,
         emissive: 0x2563eb,
         emissiveIntensity: 0.6,
-        roughness: 0.65
+        roughness: 0.65,
+        fog: true
     }),
 
     black: new THREE.MeshStandardMaterial({
-        color: 0x111827
+        color: 0x111827,
+        fog: true
     }),
 
     glass: new THREE.MeshStandardMaterial({
         color: 0x172554,
         metalness: 0.3,
-        roughness: 0.3
+        roughness: 0.3,
+        fog: true
     }),
 
     shell: new THREE.MeshStandardMaterial({
         color: 0x22c55e,
         emissive: 0x064e3b,
-        emissiveIntensity: 1
+        emissiveIntensity: 1,
+        fog: true
     })
 };
 
@@ -201,7 +348,7 @@ function makeWindowTexture(baseHex) {
 function rebuildBuildings() {
     for (const m of buildings) scene.remove(m);
     buildings.length = 0;
-    for (let i = 0; i < 300; i++) {
+    for (let i = 0; i < 600; i++) {
         const x = (Math.random() * 2 - 1) * (CONFIG.trackRadius + 120);
         const z = (Math.random() * 2 - 1) * (CONFIG.trackRadius + 120);
         // avoid track surface
@@ -217,12 +364,28 @@ function rebuildBuildings() {
         const base = buildingColors[Math.floor(Math.random() * buildingColors.length)];
         const tex = makeWindowTexture(base);
         tex.repeat.set(Math.max(1, Math.round(w / 12)), Math.max(1, Math.round(h / 16)));
-        const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.4, emissive: base, emissiveIntensity: 0.4, fog: true });
+        const mat = new THREE.MeshStandardMaterial({
+            map: tex,
+            roughness: 0.4,
+            emissive: base,
+            emissiveIntensity: 0.4,
+            fog: true
+        });
         const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
         m.position.set(x, h / 2, z);
         m.castShadow = true; m.receiveShadow = true;
         scene.add(m); buildings.push(m);
         const m2 = m.clone(); m2.position.y = -h / 2; scene.add(m2); buildings.push(m2);
+    }
+}
+
+function updateBuildingVisibility() {
+    const maxDistanceSquared = CONFIG.buildingRenderDistance ** 2;
+
+    for (const building of buildings) {
+        const dx = building.position.x - camera.position.x;
+        const dz = building.position.z - camera.position.z;
+        building.visible = dx * dx + dz * dz <= maxDistanceSquared;
     }
 }
 
@@ -250,7 +413,11 @@ function removeMushrooms() {
 
 function spawnMushrooms() {
     removeMushrooms();
-    const mat = new THREE.MeshStandardMaterial({ color: 0xff66cc, emissive: 0x660044 });
+    const mat = new THREE.MeshStandardMaterial({
+        color: 0xff66cc,
+        emissive: 0x660044,
+        fog: true
+    });
     for (let i = 0; i < CONFIG.mushroomCount; i++) {
         const seg = trackSegments[Math.floor(Math.random() * trackSegments.length)];
         const t = Math.random();
@@ -313,7 +480,11 @@ function buildTrack(params) {
     const theme = themes[params.theme] || themes.grass;
     materials.grass.color.setHex(theme.ground);
     scene.background = new THREE.Color(0x0a0014);
-    scene.fog = new THREE.Fog(0x0a0014, 1200, 4000);
+    scene.fog = new THREE.Fog(
+        0x0a0014,
+        CONFIG.fogNear,
+        CONFIG.fogFar
+    );
 
     trackPoints = [];
     trackSegments = [];
@@ -399,6 +570,7 @@ function buildTrack(params) {
     const wallIndices = [];
 
     const markingVertices = [];
+    const markingIndices = [];
 
     const halfWidth = CONFIG.trackWidth / 2;
 
@@ -461,13 +633,26 @@ function buildTrack(params) {
         if (i % 8 === 0) {
             const mid = a.clone().lerp(b, 0.5);
             const tangent = pointTangents[i];
+            const halfLength = CONFIG.centerLineLength / 2;
+            const halfWidth = CONFIG.centerLineWidth / 2;
 
-            const p1 = mid.clone().addScaledVector(tangent, -0.7);
-            const p2 = mid.clone().addScaledVector(tangent, 0.7);
+            const p1 = mid.clone().addScaledVector(tangent, -halfLength);
+            const p2 = mid.clone().addScaledVector(tangent, halfLength);
+            const p1Left = p1.clone().addScaledVector(pointNormals[i], halfWidth);
+            const p1Right = p1.clone().addScaledVector(pointNormals[i], -halfWidth);
+            const p2Left = p2.clone().addScaledVector(pointNormals[i], halfWidth);
+            const p2Right = p2.clone().addScaledVector(pointNormals[i], -halfWidth);
+            const base = markingVertices.length / 3;
 
             markingVertices.push(
-                p1.x, 0.04, p1.z,
-                p2.x, 0.04, p2.z
+                p1Left.x, 0.04, p1Left.z,
+                p1Right.x, 0.04, p1Right.z,
+                p2Left.x, 0.04, p2Left.z,
+                p2Right.x, 0.04, p2Right.z
+            );
+            markingIndices.push(
+                base, base + 2, base + 1,
+                base + 1, base + 2, base + 3
             );
         }
     }
@@ -505,7 +690,8 @@ function buildTrack(params) {
         wallGeometry,
         new THREE.MeshStandardMaterial({
             color: 0xcbd5e1,
-            side: THREE.DoubleSide
+            side: THREE.DoubleSide,
+            fog: true
         })
     );
 
@@ -523,9 +709,12 @@ function buildTrack(params) {
         new THREE.Float32BufferAttribute(markingVertices, 3)
     );
 
-    const lines = new THREE.LineSegments(
+    lineGeometry.setIndex(markingIndices);
+    lineGeometry.computeVertexNormals();
+
+    const lines = new THREE.Mesh(
     lineGeometry,
-    new THREE.LineBasicMaterial({ color: 0xffffff })
+    materials.line
 );
 
     addTrackObject(lines);
@@ -544,7 +733,8 @@ function buildTrack(params) {
         new THREE.BoxGeometry(CONFIG.trackWidth, 0.035, 1.2),
         new THREE.MeshStandardMaterial({
             color: 0xffffff,
-            emissive: 0x333333
+            emissive: 0x333333,
+            fog: true
         })
     );
 
@@ -565,8 +755,14 @@ function buildTrack(params) {
         squareSize
     );
 
-    const blackMaterial = new THREE.MeshStandardMaterial({ color: 0x111111 });
-    const whiteMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    const blackMaterial = new THREE.MeshStandardMaterial({
+        color: 0x111111,
+        fog: true
+    });
+    const whiteMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        fog: true
+    });
 
     const lateral = new THREE.Vector3(
         Math.cos(spawnAngle),
@@ -600,7 +796,7 @@ buildTrack({
 });
 
 /* =========================================================
-   KART MODEL
+   TRON MOTORCYCLE MODEL
 ========================================================= */
 
 function makeKart(color) {
@@ -609,69 +805,199 @@ function makeKart(color) {
     const visual = new THREE.Group();
     root.add(visual);
 
-    const body = new THREE.Mesh(
-        new THREE.BoxGeometry(1.9, 0.5, 3.2),
-        color === "red" ? materials.red : materials.blue
-    );
+    const bodyMaterial = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 0.25,
+        roughness: 0.55,
+        fog: true
+    });
 
-    body.position.y = 0.48;
+    const accentMaterial = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 1.8,
+        roughness: 0.35,
+        fog: true
+    });
+
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(1.05, 0.42, 1.8),
+        bodyMaterial
+    );
+    body.position.set(0, 0.58, -0.05);
     body.castShadow = true;
     visual.add(body);
 
-    const hood = new THREE.Mesh(
-        new THREE.BoxGeometry(1.5, 0.2, 0.8),
-        color === "red" ? materials.red : materials.blue
+    const tank = new THREE.Mesh(
+        new THREE.SphereGeometry(0.68, 8, 5),
+        bodyMaterial
     );
-    hood.position.set(0, 0.62, 0.9);
-    visual.add(hood);
+    tank.scale.set(0.88, 0.48, 1.15);
+    tank.position.set(0, 0.92, 0.35);
+    tank.castShadow = true;
+    visual.add(tank);
 
-    const rear = new THREE.Mesh(
-        new THREE.BoxGeometry(1.5, 0.25, 0.6),
+    const seat = new THREE.Mesh(
+        new THREE.BoxGeometry(0.82, 0.16, 0.92),
         materials.black
     );
-    rear.position.set(0, 0.62, -1.0);
-    visual.add(rear);
+    seat.position.set(0, 0.93, -0.62);
+    visual.add(seat);
 
-    const cabin = new THREE.Mesh(
-        new THREE.BoxGeometry(1.15, 0.48, 1.2),
-        materials.glass
+    const spine = new THREE.Mesh(
+        new THREE.BoxGeometry(0.16, 0.13, 2.8),
+        accentMaterial
     );
+    spine.position.set(0, 0.38, 0);
+    visual.add(spine);
 
-    cabin.position.set(0, 0.92, -0.2);
-    cabin.castShadow = true;
-    visual.add(cabin);
+    const fork = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.06, 0.06, 0.92, 6),
+        accentMaterial
+    );
+    fork.position.set(0, 0.7, 1.12);
+    fork.rotation.x = -0.22;
+    visual.add(fork);
 
-    const wheelGeometry = new THREE.CylinderGeometry(0.36, 0.36, 0.3, 6);
+    const handlebar = new THREE.Mesh(
+        new THREE.BoxGeometry(0.95, 0.08, 0.08),
+        accentMaterial
+    );
+    handlebar.position.set(0, 1.08, 1.02);
+    visual.add(handlebar);
 
-    for (const [x, z] of [
-        [-0.88, 0.9],
-        [0.88, 0.9],
-        [-0.88, -0.9],
-        [0.88, -0.9]
-    ]) {
+    const headlight = new THREE.Mesh(
+        new THREE.SphereGeometry(0.15, 6, 4),
+        new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            emissive: color,
+            emissiveIntensity: 2.5,
+            fog: true
+        })
+    );
+    headlight.position.set(0, 0.92, 1.28);
+    visual.add(headlight);
+
+    const wheelGeometry = new THREE.CylinderGeometry(0.48, 0.48, 0.66, 8);
+
+    for (const z of [-1.12, 1.12]) {
         const wheel = new THREE.Mesh(wheelGeometry, materials.black);
 
         wheel.rotation.z = Math.PI / 2;
-        wheel.position.set(x, 0.35, z);
+        wheel.position.set(0, 0.48, z);
         wheel.castShadow = true;
-
         visual.add(wheel);
     }
 
-    const spoiler = new THREE.Mesh(
-        new THREE.BoxGeometry(1.8, 0.12, 0.3),
-        materials.black
-    );
-
-    spoiler.position.set(0, 0.95, -1.25);
-    visual.add(spoiler);
+    const trailGeometry = new THREE.PlaneGeometry(0.9, 1.2);
+    const trailMaterial = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.24,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        fog: true
+    });
+    const trail = new THREE.Group();
+    const trailGlow = new THREE.Group();
+    const trailGlowMaterial = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.08,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        fog: true
+    });
 
     scene.add(root);
+    scene.add(trail, trailGlow);
 
-    return { root, visual };
+    return {
+        root,
+        visual,
+        bodyMaterial,
+        color,
+        trail,
+        trailGlow,
+        trailGeometry,
+        trailMaterial,
+        trailGlowMaterial,
+        trailPoints: [],
+        trailPanelCount: 0,
+        trailLifetime: 0.5
+    };
 }
 
-const player = makeKart("red");
+function resetKartTrail(kart) {
+    kart.trailPoints = [];
+    kart.trail.clear();
+    kart.trailGlow.clear();
+    kart.trailPanelCount = 0;
+}
+
+function rebuildKartTrail(kart) {
+    kart.trail.clear();
+    kart.trailGlow.clear();
+
+    kart.trailPoints.forEach(trailPoint => {
+        const panel = new THREE.Mesh(
+            kart.trailGeometry,
+            kart.trailMaterial
+        );
+        panel.position.set(
+            trailPoint.position.x,
+            0.6,
+            trailPoint.position.z
+        );
+        panel.rotation.y = trailPoint.angle;
+        kart.trail.add(panel);
+
+        const glowPanel = new THREE.Mesh(
+            kart.trailGeometry,
+            kart.trailGlowMaterial
+        );
+        glowPanel.position.copy(panel.position);
+        glowPanel.rotation.y = trailPoint.angle;
+        glowPanel.scale.set(1.7, 1.1, 1);
+        kart.trailGlow.add(glowPanel);
+    });
+
+    kart.trailPanelCount = kart.trailPoints.length;
+}
+
+function updateKartTrail(kart, dt) {
+    kart.trailPoints.forEach(trailPoint => {
+        trailPoint.age += dt;
+    });
+
+    const activePoints = kart.trailPoints.filter(
+        trailPoint => trailPoint.age < kart.trailLifetime
+    );
+    const expired = activePoints.length !== kart.trailPoints.length;
+    kart.trailPoints = activePoints;
+
+    const point = kart.root.position.clone();
+    point.y = 0;
+
+    const lastPoint = kart.trailPoints[kart.trailPoints.length - 1];
+    if (!lastPoint || point.distanceToSquared(lastPoint.position) > 0.01) {
+        const previous = lastPoint?.position ?? point;
+        const tangent = point.clone().sub(previous).setY(0);
+        const angle = tangent.lengthSq() > 0.0001
+            ? Math.atan2(tangent.x, tangent.z)
+            : kart.root.rotation.y;
+
+        kart.trailPoints.push({ position: point, angle, age: 0 });
+        if (kart.trailPoints.length > 32) kart.trailPoints.shift();
+        rebuildKartTrail(kart);
+    } else if (expired) {
+        rebuildKartTrail(kart);
+    }
+
+}
+
+const player = makeKart(carStats.color);
 
 const remoteKarts = new Map();
 const playerNames = new Map();
@@ -694,6 +1020,7 @@ function positionPlayerAtSpawn() {
     knockback.set(0, 0, 0);
 
     player.visual.rotation.y = 0;
+    resetKartTrail(player);
 }
 
 positionPlayerAtSpawn();
@@ -799,6 +1126,7 @@ ws.onmessage = event => {
             }
         }
 
+        renderScoreboard();
         buildTrack(message.track);
         resetRace();
     }
@@ -814,8 +1142,16 @@ ws.onmessage = event => {
         let remote = remoteKarts.get(message.id);
 
         if (!remote) {
-            remote = makeKart("blue");
+            remote = makeKart(message.color ?? 0x2563eb);
             remoteKarts.set(message.id, remote);
+        }
+
+        if (Number.isInteger(message.color) && remote.color !== message.color) {
+            remote.bodyMaterial.color.setHex(message.color);
+            remote.bodyMaterial.emissive.setHex(message.color);
+            remote.trailMaterial.color.setHex(message.color);
+            remote.trailGlowMaterial.color.setHex(message.color);
+            remote.color = message.color;
         }
 
         remote.targetPosition = new THREE.Vector3(
@@ -823,6 +1159,12 @@ ws.onmessage = event => {
             0,
             message.z
         );
+
+        if (!remote.hasReceivedState) {
+            remote.root.position.copy(remote.targetPosition);
+            remote.hasReceivedState = true;
+            resetKartTrail(remote);
+        }
 
         remote.targetAngle = message.ang;
         remote.speed = message.speed || 0;
@@ -836,6 +1178,7 @@ ws.onmessage = event => {
 
         if (remote) {
             scene.remove(remote.root);
+            scene.remove(remote.trail, remote.trailGlow);
             remoteKarts.delete(message.id);
         }
 
@@ -884,11 +1227,28 @@ ws.onmessage = event => {
 function renderScoreboard() {
     const el = document.getElementById("scoreboard");
     const ids = [myId, ...remoteKarts.keys()];
-    el.innerHTML = "<b>Players</b><br>" + ids.map(id => {
+    el.replaceChildren();
+
+    const title = document.createElement("b");
+    title.textContent = "PLAYERS";
+    el.append(title);
+
+    for (const id of ids) {
         const name = playerNames.get(id) || id;
         const w = playerWins.get(id) || 0;
-        return (id === myId ? "* " : "") + name + " (" + w + ")";
-    }).join("<br>");
+        const row = document.createElement("div");
+        row.className = id === myId ? "player-row local" : "player-row";
+
+        const nameEl = document.createElement("span");
+        nameEl.textContent = id === myId ? "> " + name : name;
+
+        const winsEl = document.createElement("span");
+        winsEl.className = "player-wins";
+        winsEl.textContent = String(w).padStart(2, "0");
+
+        row.append(nameEl, winsEl);
+        el.append(row);
+    }
 }
 
 function drawMinimap() {
@@ -967,7 +1327,7 @@ function shootShell() {
     const now = performance.now();
 
     if (
-        now - lastShotAt < CONFIG.shellCooldown ||
+        now - lastShotAt < carStats.shellCooldown ||
         !raceStarted ||
         finished ||
         !connected ||
@@ -1329,14 +1689,14 @@ function updateDriving(dt) {
     const right = keys["d"] || keys["arrowright"];
 
     if (accelerate) {
-        vel += CONFIG.acceleration * dt;
+        vel += carStats.acceleration * dt;
     }
 
     if (reverse) {
         if (vel > 0) {
             vel -= CONFIG.braking * dt;
         } else {
-            vel -= CONFIG.acceleration * 0.65 * dt;
+            vel -= carStats.acceleration * 0.65 * dt;
         }
     }
 
@@ -1350,7 +1710,7 @@ function updateDriving(dt) {
 
     if (boostTimer > 0) boostTimer = Math.max(0, boostTimer - dt);
 
-    const speedCap = boostTimer > 0 ? CONFIG.maxSpeed + 15 : CONFIG.maxSpeed;
+    const speedCap = boostTimer > 0 ? carStats.maxSpeed + 15 : carStats.maxSpeed;
 
     vel = THREE.MathUtils.clamp(
         vel,
@@ -1363,9 +1723,9 @@ function updateDriving(dt) {
     const speedFactor = Math.min(1, Math.abs(vel) / 8);
     const steeringDirection = vel >= 0 ? 1 : -1;
 
-    const speedRatio = Math.abs(vel) / CONFIG.maxSpeed;
+    const speedRatio = Math.abs(vel) / carStats.maxSpeed;
     const grip = 1 - (1 - CONFIG.minSteerFactor) * speedRatio;
-    const steerRate = CONFIG.steering * speedFactor * grip;
+    const steerRate = carStats.steering * speedFactor * grip;
 
     if (left)  ang += steerRate * dt * steeringDirection;
     if (right) ang -= steerRate * dt * steeringDirection;
@@ -1387,6 +1747,8 @@ function updateDriving(dt) {
         const normal = nextPosition.clone()
             .sub(closest.point)
             .normalize();
+        const wallContact = closest.point.clone()
+            .addScaledVector(normal, CONFIG.trackWidth / 2 - 1.0);
 
         player.root.position.copy(
             closest.point.clone().addScaledVector(
@@ -1395,8 +1757,19 @@ function updateDriving(dt) {
             )
         );
 
-        vel = Math.max(0, vel - 2 * CONFIG.acceleration * dt);
+        vel = Math.max(0, vel - 2 * carStats.acceleration * dt);
+
+        if (Math.abs(vel) > 4) {
+            sparkSpawnTimer -= dt;
+            if (sparkSpawnTimer <= 0) {
+                spawnWallSparks(wallContact, normal);
+                sparkSpawnTimer = 0.045;
+            }
+        } else {
+            sparkSpawnTimer = 0;
+        }
     } else {
+        sparkSpawnTimer = 0;
         handlePlayerCollision(nextPosition);
     }
 
@@ -1412,7 +1785,7 @@ function updateDriving(dt) {
         const d = player.root.position.distanceTo(m.mesh.position);
         if (d < 2.0) {
             boostTimer = 3.0;
-            vel = Math.min(CONFIG.maxSpeed + 15, vel + CONFIG.boostAmount);
+            vel = Math.min(carStats.maxSpeed + 15, vel + CONFIG.boostAmount);
             scene.remove(m.mesh);
             if (m.mesh.geometry) m.mesh.geometry.dispose();
             mushrooms.splice(i, 1);
@@ -1423,6 +1796,7 @@ function updateDriving(dt) {
     player.root.rotation.y = ang;
 
     player.visual.rotation.y = 0;
+    updateKartTrail(player, dt);
 
     updateLaps(dt);
     updateShells(dt);
@@ -1435,6 +1809,7 @@ function updateDriving(dt) {
 function resetRace() {
     positionPlayerAtSpawn();
     initProgress();
+    sparkSpawnTimer = 0;
 
     lap = 1;
     lapTime = 0;
@@ -1511,6 +1886,7 @@ function updateRemotePlayers(dt) {
         }
 
         remote.visual.rotation.y = remote.spin || 0;
+        updateKartTrail(remote, dt);
     }
 }
 
@@ -1533,7 +1909,8 @@ function sendPlayerState(dt) {
         z: player.root.position.z,
         ang,
         speed: vel,
-        spin: spinAngle
+        spin: spinAngle,
+        color: carStats.color
     });
 }
 
@@ -1603,7 +1980,12 @@ function animate(now) {
         camera.lookAt(0, 0, 0);
     }
 
+    updateSparks(dt);
+    updateBuildingVisibility();
+    renderer.setRenderTarget(pixelRenderTarget);
     renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+    renderer.render(pixelScene, pixelCamera);
 }
 
 requestAnimationFrame(animate);
@@ -1618,5 +2000,9 @@ window.addEventListener("resize", () => {
     camera.updateProjectionMatrix();
 
     renderer.setSize(window.innerWidth, window.innerHeight);
+    pixelRenderTarget.setSize(window.innerWidth, window.innerHeight);
+    pixelMaterial.uniforms.resolution.value.set(
+        window.innerWidth,
+        window.innerHeight
+    );
 });
-

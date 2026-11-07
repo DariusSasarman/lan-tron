@@ -1,6 +1,6 @@
-# LAN Kart
+# LAN Tron
 
-**LAN Kart** is a browser-based multiplayer kart racer for a local network. Open it
+**LAN TRON** is a browser-based multiplayer kart racer for a local network. Open it
 in a desktop browser, pick a name, and race up to three laps around a procedurally
 generated circuit while other players drive alongside you.
 
