@@ -12,7 +12,7 @@ The game is intentionally lightweight:
 - Race state is kept in memory, so restarting the server starts a fresh room.
 
 ## Here's how it looks:
-<img width="1538" height="755" alt="image" src="https://github.com/user-attachments/assets/86057458-b0db-4b0e-8337-66fab41711c8" />
+<img width="1538" height="755" alt="image" src="https://github.com/user-attachments/assets/b377514d-458b-4494-8045-0e2966549567" />
 
 
 ## Quick start
