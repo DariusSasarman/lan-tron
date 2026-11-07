@@ -264,7 +264,7 @@ function buildTrack(params) {
 
     // Theme
     const themes = STYLE.themes;
-    const theme = themes[params.theme] || themes.grass;
+    const theme = themes[params.theme] || themes.Downtown;
     materials.grass.color.setHex(theme.ground);
     scene.background = new THREE.Color(STYLE.render.fogColor);
     scene.fog = new THREE.Fog(STYLE.render.fogColor, STYLE.render.fogNear, STYLE.render.fogFar);
