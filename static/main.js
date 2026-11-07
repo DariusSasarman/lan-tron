@@ -180,34 +180,6 @@ function makeWindowTexture(baseHex) {
     return tex;
 }
 
-function rebuildBuildings() {
-    for (const m of buildings) scene.remove(m);
-    buildings.length = 0;
-    for (let i = 0; i < 300; i++) {
-        const x = (Math.random() * 2 - 1) * (CONFIG.trackRadius + 120);
-        const z = (Math.random() * 2 - 1) * (CONFIG.trackRadius + 120);
-        // avoid track surface
-        let near = false;
-        for (const p of trackPoints) {
-            const dx = p.x - x, dz = p.z - z;
-            if (dx * dx + dz * dz < (CONFIG.trackWidth / 2 + 30) ** 2) { near = true; break; }
-        }
-        if (near) continue;
-        const w = 18 + Math.random() * 28;
-        const d = 18 + Math.random() * 28;
-        const h = 1200;
-        const base = buildingColors[Math.floor(Math.random() * buildingColors.length)];
-        const tex = makeWindowTexture(base);
-        tex.repeat.set(Math.max(1, Math.round(w / 12)), Math.max(1, Math.round(h / 16)));
-        const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.4, emissive: base, emissiveIntensity: 0.4, fog: true });
-        const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-        m.position.set(x, h / 2, z);
-        m.castShadow = true; m.receiveShadow = true;
-        scene.add(m); buildings.push(m);
-        const m2 = m.clone(); m2.position.y = -h / 2; scene.add(m2); buildings.push(m2);
-    }
-}
-
 /* =========================================================
    TRACK GENERATION
 ========================================================= */
@@ -572,8 +544,7 @@ function buildTrack(params) {
     }
 
     spawnMushrooms();
-    rebuildBuildings();
-    const env = buildEnvironment(scene, { theme: params.theme || "Downtown" });
+    const env = buildEnvironment(scene, { theme: params.theme || "Downtown", trackPoints });
     window.__env = env;
     applyVertexSnapToScene(scene);
 }

@@ -15,6 +15,26 @@ export function buildEnvironment(scene, params) {
   const theme = (params && params.theme) || "Downtown";
   const T = (STYLE.themes && STYLE.themes[theme]) || { skyTop:0x1a0a2e, skyBot:0xff4d8d };
 
+  const tp = (params && params.trackPoints) || [];
+  // Place props along trackPoints just outside walls
+  const step = Math.max(1, Math.floor(tp.length / 60));
+  for (let i = 0; i < tp.length; i += step) {
+    const p0 = tp[i];
+    const p1 = tp[(i+1)%tp.length];
+    const dx = p1.x - p0.x, dz = p1.z - p0.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const nx = -dz / len, nz = dx / len;
+    const off = 12;
+    const left = { x: p0.x + nx*off, z: p0.z + nz*off };
+    const right = { x: p0.x - nx*off, z: p0.z - nz*off };
+    // hazard barrier
+    const hb = new THREE.Mesh(new THREE.BoxGeometry(4,1.2,0.4), new THREE.MeshBasicMaterial({color:0xff0080}));
+    hb.position.set(left.x,0.6,left.z); add(scene,hb);
+    // puddle on road
+    const puddle = new THREE.Mesh(new THREE.PlaneGeometry(3,3), new THREE.MeshBasicMaterial({color:0x00ffff,transparent:true,opacity:0.35}));
+    puddle.rotation.x=-Math.PI/2; puddle.position.set(p0.x,0.02,p0.z); add(scene,puddle);
+  }
+
   // Sky gradient
   const skyGeo = new THREE.SphereGeometry(4000, 24, 12);
   const skyMat = new THREE.ShaderMaterial({

@@ -11,32 +11,37 @@ const BAYER = `float bayer4(vec2 p){
 
 export function createCompositeMaterial(texture) {
   const P = STYLE.postfx;
+  const off = !!P.disableAll;
   const uniforms = {
     tDiffuse: { value: texture },
     uTime: { value: 0 },
     uResolution: { value: new THREE.Vector2(STYLE.render.lowResWidth, STYLE.render.lowResHeight) },
-    uBloom: { value: P.bloom.enabled ? P.bloom.strength : 0 },
-    uCA: { value: P.chromaticAberration.enabled ? P.chromaticAberration.strength : 0 },
-    uScan: { value: P.scanlines.enabled ? P.scanlines.strength : 0 },
-    uBleed: { value: P.colorBleed.enabled ? P.colorBleed.strength : 0 },
-    uVig: { value: P.vignette.enabled ? P.vignette.strength : 0 },
-    uGrain: { value: P.grain.enabled ? P.grain.strength : 0 },
+    uLowRes: { value: new THREE.Vector2(STYLE.render.lowResWidth, STYLE.render.lowResHeight) },
+    uBloom: { value: off ? 0 : (P.bloom.enabled ? P.bloom.strength : 0) },
+    uCA: { value: off ? 0 : (P.chromaticAberration.enabled ? P.chromaticAberration.strength : 0) },
+    uScan: { value: off ? 0 : (P.scanlines.enabled ? P.scanlines.strength : 0) },
+    uBleed: { value: off ? 0 : (P.colorBleed.enabled ? P.colorBleed.strength : 0) },
+    uVig: { value: off ? 0 : (P.vignette.enabled ? P.vignette.strength : 0) },
+    uGrain: { value: off ? 0 : (P.grain.enabled ? P.grain.strength : 0) },
     uGlitch: { value: 0 },
     uColors: { value: STYLE.palette.colors },
   };
   const mat = new THREE.ShaderMaterial({
     uniforms,
-    vertexShader: "void main(){ gl_Position = vec4(position,1.0); }",
+    vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position,1.0); }",
     fragmentShader: `
       uniform sampler2D tDiffuse;
       uniform float uTime;
       uniform vec2 uResolution;
+      varying vec2 vUv;
       uniform float uBloom, uCA, uScan, uBleed, uVig, uGrain, uGlitch;
       uniform float uColors;
+      uniform vec2 uLowRes;
       ${BAYER}
       vec3 quantize(vec3 c){ return floor(c * uColors + 0.5) / uColors; }
       void main(){
-        vec2 uv = gl_FragCoord.xy / uResolution;
+        vec2 uv = vUv;
+        vec2 px = floor(uv * uLowRes);
         // chromatic aberration
         float ca = uCA * (1.0 + uGlitch*2.0);
         vec3 col;
@@ -48,11 +53,10 @@ export function createCompositeMaterial(texture) {
         // bloom-ish
         col += col * uBloom * 0.15;
         // palette quantize + bayer dither
-        vec2 px = gl_FragCoord.xy;
         float d = bayer4(px) - 0.5;
         col = quantize(col + d / uColors);
         // scanlines
-        float scan = sin(uv.y * uResolution.y * 3.14159) * 0.5 + 0.5;
+        float scan = sin(px.y * 3.14159) * 0.5 + 0.5;
         col *= 1.0 - uScan * (1.0 - scan) * 0.3;
         // vignette
         float dist = distance(uv, vec2(0.5));

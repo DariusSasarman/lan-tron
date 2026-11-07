@@ -84,11 +84,11 @@ async def ws_endpoint(ws: WebSocket):
                     continue
 
                 finished_players.add(pid)
+                resetting = True
                 wins[pid] = wins.get(pid, 0) + 1
                 await broadcast({"type": "winner", "id": pid, "wins": wins[pid]})
 
                 # Keep the short winner screen, then start a new race.
-                resetting = True
                 await asyncio.sleep(4)
 
                 current_track = generate_track_params()
@@ -115,6 +115,7 @@ async def ws_endpoint(ws: WebSocket):
                     continue
                 if abs(x) > 2500 or abs(z) > 2500:
                     continue
+                speed = max(-200.0, min(200.0, speed))
 
                 last_shot_at[pid] = now
                 projectile_id = uuid.uuid4().hex
