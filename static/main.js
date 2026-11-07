@@ -890,13 +890,13 @@ function makeKart(color) {
         visual.add(wheel);
     }
 
-    const trailGeometry = new THREE.PlaneGeometry(0.9, 1.2);
     const trailMaterial = new THREE.MeshBasicMaterial({
         color,
         transparent: true,
         opacity: 0.24,
         blending: THREE.AdditiveBlending,
         side: THREE.DoubleSide,
+        depthWrite: false,
         fog: true
     });
     const trail = new THREE.Group();
@@ -907,6 +907,7 @@ function makeKart(color) {
         opacity: 0.08,
         blending: THREE.AdditiveBlending,
         side: THREE.DoubleSide,
+        depthWrite: false,
         fog: true
     });
 
@@ -920,50 +921,81 @@ function makeKart(color) {
         color,
         trail,
         trailGlow,
-        trailGeometry,
         trailMaterial,
         trailGlowMaterial,
         trailPoints: [],
-        trailPanelCount: 0,
         trailLifetime: 0.5
     };
 }
 
 function resetKartTrail(kart) {
     kart.trailPoints = [];
+    for (const child of [...kart.trail.children, ...kart.trailGlow.children]) {
+        child.geometry.dispose();
+    }
     kart.trail.clear();
     kart.trailGlow.clear();
-    kart.trailPanelCount = 0;
+}
+
+function createTrailGeometry(points, width) {
+    const positions = [];
+    const indices = [];
+
+    for (let i = 0; i < points.length; i++) {
+        const previous = points[Math.max(0, i - 1)].position;
+        const next = points[Math.min(points.length - 1, i + 1)].position;
+        const tangent = next.clone().sub(previous).setY(0);
+
+        if (tangent.lengthSq() < 0.0001) {
+            tangent.set(0, 0, 1);
+        } else {
+            tangent.normalize();
+        }
+
+        const side = new THREE.Vector3(-tangent.z, 0, tangent.x)
+            .multiplyScalar(width / 2);
+        const point = points[i].position;
+
+        positions.push(
+            point.x + side.x, 0.6, point.z + side.z,
+            point.x - side.x, 0.6, point.z - side.z
+        );
+
+        if (i > 0) {
+            const vertex = i * 2;
+            indices.push(
+                vertex - 2, vertex - 1, vertex,
+                vertex - 1, vertex + 1, vertex
+            );
+        }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+        "position",
+        new THREE.Float32BufferAttribute(positions, 3)
+    );
+    geometry.setIndex(indices);
+    return geometry;
 }
 
 function rebuildKartTrail(kart) {
+    for (const child of [...kart.trail.children, ...kart.trailGlow.children]) {
+        child.geometry.dispose();
+    }
     kart.trail.clear();
     kart.trailGlow.clear();
 
-    kart.trailPoints.forEach(trailPoint => {
-        const panel = new THREE.Mesh(
-            kart.trailGeometry,
-            kart.trailMaterial
-        );
-        panel.position.set(
-            trailPoint.position.x,
-            0.6,
-            trailPoint.position.z
-        );
-        panel.rotation.y = trailPoint.angle;
-        kart.trail.add(panel);
+    if (kart.trailPoints.length < 2) return;
 
-        const glowPanel = new THREE.Mesh(
-            kart.trailGeometry,
-            kart.trailGlowMaterial
-        );
-        glowPanel.position.copy(panel.position);
-        glowPanel.rotation.y = trailPoint.angle;
-        glowPanel.scale.set(1.7, 1.1, 1);
-        kart.trailGlow.add(glowPanel);
-    });
-
-    kart.trailPanelCount = kart.trailPoints.length;
+    kart.trail.add(new THREE.Mesh(
+        createTrailGeometry(kart.trailPoints, 0.9),
+        kart.trailMaterial
+    ));
+    kart.trailGlow.add(new THREE.Mesh(
+        createTrailGeometry(kart.trailPoints, 1.6),
+        kart.trailGlowMaterial
+    ));
 }
 
 function updateKartTrail(kart, dt) {
