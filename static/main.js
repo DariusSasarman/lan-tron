@@ -1,11 +1,5 @@
 
-import * as THREE from "./vendor/three.module.js";
-import { initRender, renderFrame, applyVertexSnap, applyVertexSnapToScene, handleResize } from "./render.js";
-import { STYLE, cyclePreset } from "./style.js";
-import { buildEnvironment, updateEnvironment } from "./environment.js";
-import { makeKart, neonColorFor } from "./vehicles.js";
-import { initHUD, updateHUD as hudUpdate } from "./hud.js";
-import { showTitle, hideTitle } from "./menus.js";
+import * as THREE from "three";
 
 /* =========================================================
    CONFIGURATION
@@ -74,22 +68,43 @@ let connected = false;
    THREE.JS INITIALIZATION
 ========================================================= */
 
-const renderer = initRender();
 const scene = new THREE.Scene();
-const hemi = new THREE.HemisphereLight(0x6a3ddc, 0x1a0a1a, 0.6);
-scene.add(hemi);
-const dir = new THREE.DirectionalLight(0xff4d8d, 0.4);
-dir.position.set(100, 200, 50);
-scene.add(dir);
-scene.background = new THREE.Color(STYLE.render.fogColor);
-scene.fog = new THREE.Fog(STYLE.render.fogColor, STYLE.render.fogNear, STYLE.render.fogFar);
+
+scene.background = new THREE.Color(0x0a0014);
+scene.fog = new THREE.Fog(0x0a0014, 1200, 4000);
 
 const camera = new THREE.PerspectiveCamera(
     65,
-    STYLE.render.lowResWidth / STYLE.render.lowResHeight,
+    window.innerWidth / window.innerHeight,
     0.1,
     5000
 );
+
+const renderer = new THREE.WebGLRenderer({
+    antialias: false
+});
+
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(1);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x526044, 1.3));
+
+const sun = new THREE.DirectionalLight(0xffffff, 2.0);
+sun.position.set(80, 120, 40);
+sun.castShadow = true;
+
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -2000;
+sun.shadow.camera.right = 2000;
+sun.shadow.camera.top = 2000;
+sun.shadow.camera.bottom = -2000;
+
+scene.add(sun);
 
 /* =========================================================
    MATERIALS
@@ -149,8 +164,6 @@ const materials = {
     })
 };
 
-for (const m of Object.values(materials)) { if (m && m.flatShading !== undefined) m.flatShading = true; }
-
 /* =========================================================
    WORLD
 ========================================================= */
@@ -185,6 +198,34 @@ function makeWindowTexture(baseHex) {
     return tex;
 }
 
+function rebuildBuildings() {
+    for (const m of buildings) scene.remove(m);
+    buildings.length = 0;
+    for (let i = 0; i < 300; i++) {
+        const x = (Math.random() * 2 - 1) * (CONFIG.trackRadius + 120);
+        const z = (Math.random() * 2 - 1) * (CONFIG.trackRadius + 120);
+        // avoid track surface
+        let near = false;
+        for (const p of trackPoints) {
+            const dx = p.x - x, dz = p.z - z;
+            if (dx * dx + dz * dz < (CONFIG.trackWidth / 2 + 30) ** 2) { near = true; break; }
+        }
+        if (near) continue;
+        const w = 18 + Math.random() * 28;
+        const d = 18 + Math.random() * 28;
+        const h = 1200;
+        const base = buildingColors[Math.floor(Math.random() * buildingColors.length)];
+        const tex = makeWindowTexture(base);
+        tex.repeat.set(Math.max(1, Math.round(w / 12)), Math.max(1, Math.round(h / 16)));
+        const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.4, emissive: base, emissiveIntensity: 0.4, fog: true });
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+        m.position.set(x, h / 2, z);
+        m.castShadow = true; m.receiveShadow = true;
+        scene.add(m); buildings.push(m);
+        const m2 = m.clone(); m2.position.y = -h / 2; scene.add(m2); buildings.push(m2);
+    }
+}
+
 /* =========================================================
    TRACK GENERATION
 ========================================================= */
@@ -210,7 +251,6 @@ function removeMushrooms() {
 function spawnMushrooms() {
     removeMushrooms();
     const mat = new THREE.MeshStandardMaterial({ color: 0xff66cc, emissive: 0x660044 });
-    applyVertexSnap(mat);
     for (let i = 0; i < CONFIG.mushroomCount; i++) {
         const seg = trackSegments[Math.floor(Math.random() * trackSegments.length)];
         const t = Math.random();
@@ -263,11 +303,17 @@ function buildTrack(params) {
     removeTrack();
 
     // Theme
-    const themes = STYLE.themes;
-    const theme = themes[params.theme] || themes.Downtown;
+    const themes = {
+        grass: { ground: 0x347b42, sky: 0x87ceeb },
+        sand: { ground: 0xc2a878, sky: 0xdfe9f3 },
+        leaves: { ground: 0x8b5a2b, sky: 0xbfd6e8 },
+        snow: { ground: 0xe8eef2, sky: 0xcfe6f5 },
+        dirt: { ground: 0x5c4033, sky: 0xa9b8c9 },
+    };
+    const theme = themes[params.theme] || themes.grass;
     materials.grass.color.setHex(theme.ground);
-    scene.background = new THREE.Color(STYLE.render.fogColor);
-    scene.fog = new THREE.Fog(STYLE.render.fogColor, STYLE.render.fogNear, STYLE.render.fogFar);
+    scene.background = new THREE.Color(0x0a0014);
+    scene.fog = new THREE.Fog(0x0a0014, 1200, 4000);
 
     trackPoints = [];
     trackSegments = [];
@@ -543,9 +589,7 @@ function buildTrack(params) {
     }
 
     spawnMushrooms();
-    const env = buildEnvironment(scene, { theme: params.theme || "Downtown", trackPoints });
-    window.__env = env;
-    applyVertexSnapToScene(scene);
+    rebuildBuildings();
 }
 
 buildTrack({
@@ -559,8 +603,75 @@ buildTrack({
    KART MODEL
 ========================================================= */
 
-const player = makeKart(neonColorFor("player"));
-scene.add(player.root);
+function makeKart(color) {
+    const root = new THREE.Group();
+
+    const visual = new THREE.Group();
+    root.add(visual);
+
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(1.9, 0.5, 3.2),
+        color === "red" ? materials.red : materials.blue
+    );
+
+    body.position.y = 0.48;
+    body.castShadow = true;
+    visual.add(body);
+
+    const hood = new THREE.Mesh(
+        new THREE.BoxGeometry(1.5, 0.2, 0.8),
+        color === "red" ? materials.red : materials.blue
+    );
+    hood.position.set(0, 0.62, 0.9);
+    visual.add(hood);
+
+    const rear = new THREE.Mesh(
+        new THREE.BoxGeometry(1.5, 0.25, 0.6),
+        materials.black
+    );
+    rear.position.set(0, 0.62, -1.0);
+    visual.add(rear);
+
+    const cabin = new THREE.Mesh(
+        new THREE.BoxGeometry(1.15, 0.48, 1.2),
+        materials.glass
+    );
+
+    cabin.position.set(0, 0.92, -0.2);
+    cabin.castShadow = true;
+    visual.add(cabin);
+
+    const wheelGeometry = new THREE.CylinderGeometry(0.36, 0.36, 0.3, 6);
+
+    for (const [x, z] of [
+        [-0.88, 0.9],
+        [0.88, 0.9],
+        [-0.88, -0.9],
+        [0.88, -0.9]
+    ]) {
+        const wheel = new THREE.Mesh(wheelGeometry, materials.black);
+
+        wheel.rotation.z = Math.PI / 2;
+        wheel.position.set(x, 0.35, z);
+        wheel.castShadow = true;
+
+        visual.add(wheel);
+    }
+
+    const spoiler = new THREE.Mesh(
+        new THREE.BoxGeometry(1.8, 0.12, 0.3),
+        materials.black
+    );
+
+    spoiler.position.set(0, 0.95, -1.25);
+    visual.add(spoiler);
+
+    scene.add(root);
+
+    return { root, visual };
+}
+
+const player = makeKart("red");
 
 const remoteKarts = new Map();
 const playerNames = new Map();
@@ -703,8 +814,7 @@ ws.onmessage = event => {
         let remote = remoteKarts.get(message.id);
 
         if (!remote) {
-            remote = makeKart(neonColorFor(message.id));
-            scene.add(remote.root);
+            remote = makeKart("blue");
             remoteKarts.set(message.id, remote);
         }
 
@@ -774,17 +884,11 @@ ws.onmessage = event => {
 function renderScoreboard() {
     const el = document.getElementById("scoreboard");
     const ids = [myId, ...remoteKarts.keys()];
-    el.textContent = "";
-    const b = document.createElement("b");
-    b.textContent = "Players";
-    el.appendChild(b);
-    el.appendChild(document.createElement("br"));
-    ids.forEach((id, i) => {
-        if (i) el.appendChild(document.createElement("br"));
+    el.innerHTML = "<b>Players</b><br>" + ids.map(id => {
         const name = playerNames.get(id) || id;
         const w = playerWins.get(id) || 0;
-        el.appendChild(document.createTextNode((id === myId ? "* " : "") + name + " (" + w + ")"));
-    });
+        return (id === myId ? "* " : "") + name + " (" + w + ")";
+    }).join("<br>");
 }
 
 function drawMinimap() {
@@ -887,7 +991,6 @@ function createShell(message) {
     if (shells.has(message.projectile_id)) return;
 
     const mesh = new THREE.Mesh(shellGeometry, materials.shell);
-    applyVertexSnap(materials.shell);
 
     const forward = new THREE.Vector3(
         Math.sin(message.ang),
@@ -993,57 +1096,37 @@ function updateShells(dt) {
    TRACK COLLISION
 ========================================================= */
 
-const _ctpAb = new THREE.Vector3();
-const _ctpAp = new THREE.Vector3();
-const _ctpPoint = new THREE.Vector3();
-let _ctpLastIndex = 0;
-
 function closestTrackPoint(position) {
     let bestDistanceSq = Infinity;
-    let bestPoint = _ctpPoint;
-    let bestSegment = trackSegments[0];
-    let bestIndex = 0;
+    let bestPoint = null;
+    let bestSegment = null;
 
-    const n = trackSegments.length;
-    const start = Math.max(0, _ctpLastIndex - 8);
-    const end = Math.min(n, _ctpLastIndex + 9);
+    for (const segment of trackSegments) {
+        const ab = new THREE.Vector3().subVectors(segment.b, segment.a);
+        const ap = new THREE.Vector3().subVectors(position, segment.a);
 
-    // Local window first
-    for (let i = start; i < end; i++) {
-        const segment = trackSegments[i];
-        _ctpAb.subVectors(segment.b, segment.a);
-        _ctpAp.subVectors(position, segment.a);
-        const lenSq = _ctpAb.lengthSq();
-        const t = THREE.MathUtils.clamp(lenSq > 0 ? _ctpAp.dot(_ctpAb) / lenSq : 0, 0, 1);
-        _ctpPoint.copy(segment.a).addScaledVector(_ctpAb, t);
-        const d = position.distanceToSquared(_ctpPoint);
-        if (d < bestDistanceSq) {
-            bestDistanceSq = d;
-            bestPoint = _ctpPoint.clone();
+        const t = THREE.MathUtils.clamp(
+            ap.dot(ab) / ab.lengthSq(),
+            0,
+            1
+        );
+
+        const point = segment.a.clone().addScaledVector(ab, t);
+
+        const distanceSq = position.distanceToSquared(point);
+
+        if (distanceSq < bestDistanceSq) {
+            bestDistanceSq = distanceSq;
+            bestPoint = point;
             bestSegment = segment;
-            bestIndex = i;
         }
     }
-    // Fallback full scan if window missed
-    if (bestDistanceSq === Infinity || bestDistanceSq > 1e6) {
-        for (let i = 0; i < n; i++) {
-            const segment = trackSegments[i];
-            _ctpAb.subVectors(segment.b, segment.a);
-            _ctpAp.subVectors(position, segment.a);
-            const lenSq = _ctpAb.lengthSq();
-            const t = THREE.MathUtils.clamp(lenSq > 0 ? _ctpAp.dot(_ctpAb) / lenSq : 0, 0, 1);
-            _ctpPoint.copy(segment.a).addScaledVector(_ctpAb, t);
-            const d = position.distanceToSquared(_ctpPoint);
-            if (d < bestDistanceSq) {
-                bestDistanceSq = d;
-                bestPoint = _ctpPoint.clone();
-                bestSegment = segment;
-                bestIndex = i;
-            }
-        }
-    }
-    _ctpLastIndex = bestIndex;
-    return { point: bestPoint, segment: bestSegment, distance: Math.sqrt(bestDistanceSq) };
+
+    return {
+        point: bestPoint,
+        segment: bestSegment,
+        distance: Math.sqrt(bestDistanceSq)
+    };
 }
 
 /* =========================================================
@@ -1352,10 +1435,6 @@ function updateDriving(dt) {
 function resetRace() {
     positionPlayerAtSpawn();
     initProgress();
-    // snap camera immediately
-    const forward = new THREE.Vector3(Math.sin(ang),0,Math.cos(ang));
-    camera.position.copy(player.root.position).addScaledVector(forward,-9).add(new THREE.Vector3(0,5.5,0));
-    camera.lookAt(player.root.position.clone().addScaledVector(forward,5).add(new THREE.Vector3(0,1,0)));
 
     lap = 1;
     lapTime = 0;
@@ -1463,11 +1542,8 @@ function sendPlayerState(dt) {
 ========================================================= */
 
 function updateHUD() {
-    const speed = Math.round(Math.abs(vel) * 3.6);
-    document.getElementById("speed").textContent = speed;
-    const bars = document.querySelectorAll("#speedbar i");
-    const filled = Math.min(bars.length, Math.round(speed / 18));
-    bars.forEach((bar, index) => bar.classList.toggle("on", index < filled));
+    document.getElementById("speed").textContent =
+        Math.round(Math.abs(vel) * 3.6);
 
     document.getElementById("lap").textContent =
         Math.min(lap, CONFIG.laps);
@@ -1477,8 +1553,6 @@ function updateHUD() {
 
     document.getElementById("best").textContent =
         bestLap === null ? "--" : bestLap.toFixed(2);
-    document.getElementById("position").textContent =
-        `1 / ${remoteKarts.size + 1}`;
 }
 
 /* =========================================================
@@ -1510,13 +1584,6 @@ let lastFrame = performance.now();
 
 function animate(now) {
     requestAnimationFrame(animate);
-    fpsFrames++;
-    if (now - fpsAt >= 500) {
-        document.getElementById("fps").textContent =
-            `${Math.round(fpsFrames * 1000 / (now - fpsAt))} FPS`;
-        fpsFrames = 0;
-        fpsAt = now;
-    }
 
     const dt = Math.min(
         0.04,
@@ -1535,8 +1602,8 @@ function animate(now) {
     } else {
         camera.lookAt(0, 0, 0);
     }
-    updateEnvironment(dt, window.__env, camera);
-    renderFrame(scene, camera, dt);
+
+    renderer.render(scene, camera);
 }
 
 requestAnimationFrame(animate);
@@ -1546,31 +1613,10 @@ requestAnimationFrame(animate);
 ========================================================= */
 
 window.addEventListener("resize", () => {
-    camera.aspect = STYLE.render.lowResWidth / STYLE.render.lowResHeight;
+    camera.aspect = window.innerWidth / window.innerHeight;
+
     camera.updateProjectionMatrix();
-    handleResize();
+
+    renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-
-let showFps = false;
-let fpsFrames = 0;
-let fpsAt = performance.now();
-window.addEventListener("keydown", e => {
-  if (e.key === "F1") {
-    e.preventDefault();
-    const enabled = Object.entries(STYLE.postfx)
-      .filter(([, value]) => value && "enabled" in value)
-      .map(([name, value]) => `${name}:${value.enabled ? "ON" : "OFF"}`)
-      .join(" ");
-    document.getElementById("connection").textContent = `${STYLE.activePreset} ${enabled}`;
-  }
-  if (e.key === "F2") {
-    e.preventDefault();
-    showFps = !showFps;
-    document.getElementById("fps").hidden = !showFps;
-  }
-  if (e.key === "F3") {
-    e.preventDefault();
-    document.getElementById("connection").textContent = `PRESET ${cyclePreset()}`;
-  }
-});

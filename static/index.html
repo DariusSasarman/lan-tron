@@ -12,12 +12,8 @@
 
 <div id="hud">
     PLAYER: <b id="pid">Connecting...</b><br>
-    SPEED: <b id="speed">0</b> km/h
-    <div id="speedbar"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-    <br>
+    SPEED: <b id="speed">0</b> km/h<br>
     LAP: <b id="lap">1</b> / 3<br>
-    POSITION: <b id="position">1 / 1</b><br>
-    CYBERWARE: <b id="item">NANO-GEL</b><br>
     TIME: <b id="time">0.0</b>s<br>
     BEST: <b id="best">--</b><br>
     PLAYERS: <b id="players">1</b>
@@ -25,7 +21,6 @@
 
 <div id="status">
     <span id="connection">Connecting...</span>
-    <span id="fps" hidden></span>
 </div>
 
 <canvas id="minimap" width="160" height="160" style="position:fixed;bottom:14px;left:14px;z-index:5;border-radius:8px;background:#0b1622aa;"></canvas>
@@ -37,14 +32,11 @@
     &nbsp; SPACE Fire &nbsp; R Reset
 </div>
 
-<div id="wrongway">WRONG WAY</div>
 <div id="winner"></div>
 
 <div id="overlay">
     <div id="panel">
-        <div class="boot">BIOS 2.003 // NETWORK LINK ESTABLISHED</div>
         <h1>LAN KART</h1>
-        <div class="subtitle">NIGHT CITY STREET CIRCUIT</div>
         <p>
             Three laps. One circuit. Other players on your LAN.
             Avoid the walls, use your shells, and get to the finish.
@@ -55,11 +47,17 @@
             SPACE to fire
         </p>
         <input id="nameInput" placeholder="Your name (optional)" maxlength="20" style="margin-top:12px;padding:8px;border-radius:6px;border:1px solid #ffffff25;background:#0b1622;color:white;width:80%" />
-        <div class="lobby-state"><span class="player-swatch"></span> PLAYER <b>CONNECTED</b></div>
         <button id="startButton">START RACE</button>
-        <div class="boot-hint">F1 FX PANEL &nbsp; F2 FPS &nbsp; F3 PRESET</div>
     </div>
 </div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+    }
+}
+</script>
 
 <script type="module" src="main.js"></script>
 </body>
