@@ -1524,7 +1524,7 @@ function animate(now) {
     } else {
         camera.lookAt(0, 0, 0);
     }
-    updateEnvironment(dt, window.__env);
+    updateEnvironment(dt, window.__env, camera);
     renderFrame(scene, camera, dt);
 }
 

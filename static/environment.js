@@ -163,19 +163,21 @@ export function buildEnvironment(scene, params) {
   return envAnim;
 }
 
-export function updateEnvironment(dt, env){
+export function updateEnvironment(dt, env, camera){
   const e = env || envAnim;
   const t = performance.now()/1000;
   const nf = Math.floor(t*14);
   for(const n of e.neons){
     if(n.type==="blink"){ n.mesh.visible = (nf%2===0); }
-    if(n.type==="flicker"){ n.mesh.visible = Math.random()>0.05; }
-    if(n.type==="neon"){ n.mesh.visible = n.dead ? Math.random()>0.4 : Math.random()>0.02; }
+    if(n.type==="flicker"){ n.mesh.visible = (nf%8!==0); }
+    if(n.type==="neon"){ n.mesh.visible = n.dead ? (nf%3!==0) : (nf%17!==0); }
     if(n.type==="drift"){ n.mesh.position.x += n.vx*dt; n.mesh.position.z += n.vz*dt; if(Math.abs(n.mesh.position.x)>2000){n.vx*=-1;} if(Math.abs(n.mesh.position.z)>2000){n.vz*=-1;} }
   }
+  const cx = camera ? camera.position.x : 0;
+  const cz = camera ? camera.position.z : 0;
   for(const r of e.rainLayers){
     const arr=r.mesh.geometry.attributes.position.array;
-    for(let i=0;i<arr.length;i+=3){ arr[i+1]-=r.speed*dt; if(arr[i+1]<0){ arr[i+1]=600; arr[i]=(Math.random()*2-1)*2500; arr[i+2]=(Math.random()*2-1)*2500; } }
+    for(let i=0;i<arr.length;i+=3){ arr[i+1]-=r.speed*dt; if(arr[i+1]<0){ arr[i+1]=600; arr[i]=cx+(Math.random()*2-1)*60; arr[i+2]=cz+(Math.random()*2-1)*60; } }
     r.mesh.geometry.attributes.position.needsUpdate=true;
   }
   for(const s of e.steam){ s.mesh.scale.setScalar(1+0.3*Math.sin(t*2+s.phase)); s.mesh.material.opacity=0.15+0.1*Math.sin(t*3+s.phase); }
